@@ -1,11 +1,12 @@
-"""Tests for install script idempotency — safe to run multiple times.
+"""Tests for install and uninstall script idempotency — safe to run multiple times.
 
-Verifies that running the install script multiple times produces
+Verifies that running the install/uninstall scripts multiple times produces
 consistent results with no duplicate side effects. All tests mock
 the subprocess to avoid calling the real claude CLI.
 
 Spec Reference:
-    Section 7.6 (lines 1381-1386): Idempotency guarantees
+    Section 7.6 (lines 1381-1386): Install idempotency guarantees
+    Section 7.7 (lines 1408-1409): Uninstall idempotency guarantees
 """
 
 import json
@@ -16,6 +17,7 @@ from unittest import mock
 import pytest
 
 MODULE = "install_claude_marketplaces"
+UNINSTALL_MODULE = "uninstall_claude_marketplaces"
 
 
 def _setup_marketplace_with_plugins(
@@ -238,3 +240,131 @@ class TestIdempotency:
 
         assert all(code == 0 for code in exit_codes), f"All runs must return 0: {exit_codes}"
         assert len(set(call_counts)) == 1, f"All runs must have same call count: {call_counts}"
+
+
+@pytest.mark.unit
+class TestUninstallIdempotency:
+    """Tests for uninstall script idempotency guarantees (spec 7.7)."""
+
+    def test_spec_7_7_idempotent_uninstall_nothing_installed(self, tmp_path, monkeypatch, claude_bin):
+        """Verify: Uninstall when nothing is installed exits 0.
+
+        Given: Marketplace directory does not exist
+        When: main() from uninstall script is called
+        Then: Exits with code 0 (no-op, nothing to uninstall)
+        Spec: Section 7.7 — idempotency guarantee
+        """
+        from uninstall_claude_marketplaces import main as uninstall_main
+
+        missing_dir = tmp_path / "no-such-dir"
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(missing_dir))
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{UNINSTALL_MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            exit_code = uninstall_main()
+        assert exit_code == 0, "Uninstall when nothing installed must exit 0"
+
+    def test_spec_7_7_idempotent_double_uninstall_exit_0(self, idempotency_env, claude_bin):
+        """Verify: Running uninstall twice both exit 0.
+
+        Given: A marketplace directory with installed plugins
+        When: main() from uninstall script is called twice
+        Then: Both calls return exit code 0
+        Spec: Section 7.7 — idempotency guarantee
+        """
+        from uninstall_claude_marketplaces import main as uninstall_main
+
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{UNINSTALL_MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            exit_code_1 = uninstall_main()
+            exit_code_2 = uninstall_main()
+        assert exit_code_1 == 0, "First uninstall must exit 0"
+        assert exit_code_2 == 0, "Second uninstall must also exit 0"
+
+    def test_spec_7_7_idempotent_install_uninstall_uninstall(self, idempotency_env, claude_bin):
+        """Verify: Install followed by two uninstall runs all exit 0.
+
+        Given: A marketplace with plugins
+        When: install main(), then uninstall main() twice
+        Then: All three runs return exit code 0
+        Spec: Section 7.7 — idempotency guarantee (install + double-uninstall)
+        """
+        from install_claude_marketplaces import main as install_main
+        from uninstall_claude_marketplaces import main as uninstall_main
+
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{MODULE}.shutil.which", return_value=claude_bin),
+            mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            install_code = install_main()
+        with (
+            mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{UNINSTALL_MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            uninstall_code_1 = uninstall_main()
+            uninstall_code_2 = uninstall_main()
+        assert install_code == 0, "Install must exit 0"
+        assert uninstall_code_1 == 0, "First uninstall must exit 0"
+        assert uninstall_code_2 == 0, "Second uninstall must exit 0"
+
+    def test_spec_7_7_idempotent_no_errors_second_run(self, idempotency_env, claude_bin, caplog):
+        """Verify: Second uninstall run produces no error logs.
+
+        Given: A marketplace with plugins, first uninstall already run
+        When: main() from uninstall script is called a second time
+        Then: Second run produces no ERROR-level log messages
+        Spec: Section 7.7 — idempotency guarantee (clean second run)
+        """
+        from uninstall_claude_marketplaces import main as uninstall_main
+
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        caplog.set_level(logging.INFO)
+        with (
+            mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{UNINSTALL_MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            uninstall_main()
+            caplog.clear()
+            uninstall_main()
+        # caplog captures all error output from main(): the only sys.stderr.write in
+        # uninstall_claude_marketplaces is in the __main__ guard block (line ~240) for
+        # LOG_LEVEL validation, which is never executed when calling main() directly.
+        error_logs = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_logs) == 0, f"Second run must produce no error logs: {[r.message for r in error_logs]}"
+
+    def test_spec_7_7_idempotent_summary_consistent_second_run(self, idempotency_env, claude_bin, caplog):
+        """Verify: Both uninstall runs produce identical summary logs.
+
+        Given: A marketplace with plugins
+        When: main() from uninstall script is called twice
+        Then: Both runs produce the same Uninstall summary message
+        Spec: Section 7.7 — idempotency guarantee (consistent output)
+        """
+        from uninstall_claude_marketplaces import main as uninstall_main
+
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        caplog.set_level(logging.INFO)
+
+        def get_summary() -> list[str]:
+            return [r.message for r in caplog.records if r.levelno == logging.INFO and "Uninstall summary" in r.message]
+
+        with (
+            mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{UNINSTALL_MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            uninstall_main()
+            summaries_1 = get_summary()
+            caplog.clear()
+            uninstall_main()
+            summaries_2 = get_summary()
+        assert len(summaries_1) == 1, "First run must produce exactly one summary"
+        assert len(summaries_2) == 1, "Second run must produce exactly one summary"
+        assert summaries_1[0] == summaries_2[0], (
+            f"Summary messages must be identical: '{summaries_1[0]}' vs '{summaries_2[0]}'"
+        )
