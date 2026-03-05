@@ -12,6 +12,7 @@ Spec Reference:
 import json
 import logging
 import pathlib
+import subprocess
 from unittest import mock
 
 import pytest
@@ -179,3 +180,138 @@ class TestPluginUninstall:
         assert "from install_claude_marketplaces import" in source or (
             "import install_claude_marketplaces" in source
         ), "Uninstall module must import from install module to reuse discover_plugins"
+
+
+@pytest.mark.unit
+class TestUninstallCoverage:
+    """Additional tests for full coverage of uninstall module."""
+
+    def test_uninstall_timeout_invalid_value_exits(self, monkeypatch):
+        """Verify: Invalid CLAUDE_UNINSTALL_TIMEOUT causes exit with code 1.
+
+        Spec: Section 7.5 — fail-fast on invalid config
+        """
+        from uninstall_claude_marketplaces import _get_uninstall_timeout
+
+        monkeypatch.setenv("CLAUDE_UNINSTALL_TIMEOUT", "not-a-number")
+        with pytest.raises(SystemExit) as exc_info:
+            _get_uninstall_timeout()
+        assert exc_info.value.code == 1
+
+    def test_uninstall_timeout_zero_exits(self, monkeypatch):
+        """Verify: Zero CLAUDE_UNINSTALL_TIMEOUT causes exit with code 1.
+
+        Spec: Section 7.5 — fail-fast on invalid config
+        """
+        from uninstall_claude_marketplaces import _get_uninstall_timeout
+
+        monkeypatch.setenv("CLAUDE_UNINSTALL_TIMEOUT", "0")
+        with pytest.raises(SystemExit) as exc_info:
+            _get_uninstall_timeout()
+        assert exc_info.value.code == 1
+
+    def test_uninstall_timeout_negative_exits(self, monkeypatch):
+        """Verify: Negative CLAUDE_UNINSTALL_TIMEOUT causes exit with code 1.
+
+        Spec: Section 7.5 — fail-fast on invalid config
+        """
+        from uninstall_claude_marketplaces import _get_uninstall_timeout
+
+        monkeypatch.setenv("CLAUDE_UNINSTALL_TIMEOUT", "-5")
+        with pytest.raises(SystemExit) as exc_info:
+            _get_uninstall_timeout()
+        assert exc_info.value.code == 1
+
+    def test_uninstall_plugin_timeout_expired(self, claude_bin):
+        """Verify: Timeout during uninstall returns False.
+
+        Spec: Section 7.5 — timeout handling
+        """
+        from uninstall_claude_marketplaces import uninstall_plugin
+
+        with mock.patch(
+            f"{MODULE}.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=30),
+        ):
+            result = uninstall_plugin(claude_bin, "slow-plugin", "test-market")
+        assert result is False
+
+    def test_remove_marketplace_success(self, claude_bin, tmp_path):
+        """Verify: remove_marketplace returns True on success.
+
+        Spec: Section 7.7 — marketplace removal
+        """
+        from uninstall_claude_marketplaces import remove_marketplace
+
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = remove_marketplace(claude_bin, tmp_path / "market")
+        assert result is True
+
+    def test_remove_marketplace_failure(self, claude_bin, tmp_path, caplog):
+        """Verify: remove_marketplace returns False on failure.
+
+        Spec: Section 7.5 — error handling
+        """
+        from uninstall_claude_marketplaces import remove_marketplace
+
+        mock_result = mock.Mock(returncode=1, stdout="", stderr="remove error")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = remove_marketplace(claude_bin, tmp_path / "market")
+        assert result is False
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_records) >= 1
+
+    def test_remove_marketplace_timeout(self, claude_bin, tmp_path):
+        """Verify: remove_marketplace returns False on timeout.
+
+        Spec: Section 7.5 — timeout handling
+        """
+        from uninstall_claude_marketplaces import remove_marketplace
+
+        with mock.patch(
+            f"{MODULE}.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=30),
+        ):
+            result = remove_marketplace(claude_bin, tmp_path / "market")
+        assert result is False
+
+    def test_uninstall_marketplace_with_failures(self, tmp_path, claude_bin):
+        """Verify: uninstall_marketplace returns False when any operation fails.
+
+        Spec: Section 7.7 — mixed failure handling
+        """
+        from uninstall_claude_marketplaces import uninstall_marketplace
+
+        marketplace_dir = tmp_path / "test-market"
+        marketplace_dir.mkdir()
+        _setup_marketplace_with_plugins(marketplace_dir, "test-market", ["plug-a"])
+
+        def mock_run_side_effect(cmd, **kwargs):
+            if "uninstall" in cmd:
+                return mock.Mock(returncode=1, stdout="", stderr="fail")
+            return mock.Mock(returncode=0, stdout="ok", stderr="")
+
+        with mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect):
+            result = uninstall_marketplace(claude_bin, marketplace_dir, "test-market")
+        assert result is False
+
+    def test_uninstall_marketplace_remove_failure(self, tmp_path, claude_bin):
+        """Verify: uninstall_marketplace returns False when marketplace removal fails.
+
+        Spec: Section 7.7 — marketplace removal failure
+        """
+        from uninstall_claude_marketplaces import uninstall_marketplace
+
+        marketplace_dir = tmp_path / "test-market"
+        marketplace_dir.mkdir()
+        _setup_marketplace_with_plugins(marketplace_dir, "test-market", ["plug-a"])
+
+        def mock_run_side_effect(cmd, **kwargs):
+            if "remove" in cmd:
+                return mock.Mock(returncode=1, stdout="", stderr="remove failed")
+            return mock.Mock(returncode=0, stdout="ok", stderr="")
+
+        with mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect):
+            result = uninstall_marketplace(claude_bin, marketplace_dir, "test-market")
+        assert result is False

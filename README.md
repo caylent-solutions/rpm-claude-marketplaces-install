@@ -48,6 +48,7 @@ plugins.
 | `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins. Code-level default used when env var is unset. |
 | `CLAUDE_REGISTER_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each marketplace registration subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 | `CLAUDE_INSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each plugin install subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `CLAUDE_UNINSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 
 ### Error Handling (Spec 7.5)
 
@@ -73,21 +74,26 @@ marketplace names, and plugin identifiers.
 
 The `uninstall_claude_marketplaces.py` module implements the uninstall
 workflow defined in the specification (section 7.7). It discovers installed
-plugins and uninstalls them, then removes marketplace registrations.
+plugins and uninstalls them, then removes marketplace registrations. This
+module provides library functions called by the RPM uninstall scriptlet and
+does not have a standalone `main()` entry point.
 
 ### Uninstall Functions
 
+- `_get_uninstall_timeout()` — Reads and validates `CLAUDE_UNINSTALL_TIMEOUT`
+  from the environment. Returns the timeout value as an integer. Exits with
+  code 1 if the value is not a valid positive integer.
 - `uninstall_plugin(claude_bin, plugin_name, marketplace_name)` — Uninstalls a
   plugin via `claude plugin uninstall <name>@<marketplace> --scope user`. Returns
   `True` on success, `False` on failure. Timeouts and errors are logged.
 - `remove_marketplace(claude_bin, marketplace_path)` — Removes a marketplace
   registration via `claude plugin marketplace remove <path>`. Returns `True` on
-  success, `False` on failure.
+  success, `False` on failure. Timeouts and errors are logged.
 - `uninstall_marketplace(claude_bin, marketplace_path, marketplace_name)` —
   Orchestrates per-marketplace uninstall: discovers plugins using the shared
   `discover_plugins()` function from the install module, uninstalls each plugin,
   then removes the marketplace registration. Returns `True` if all operations
-  succeeded.
+  succeeded, `False` if any operation failed.
 
 ### Uninstall Configuration
 
