@@ -50,6 +50,9 @@ plugins.
 | `CLAUDE_INSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each plugin install subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 | `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 
+For uninstall-specific configuration (`LOG_LEVEL`, `CLAUDE_UNINSTALL_TIMEOUT`), see the
+[Uninstall Configuration](#uninstall-configuration) section.
+
 ### Error Handling (Spec 7.5)
 
 | Condition | Exit Code | Log Level | Behavior |
