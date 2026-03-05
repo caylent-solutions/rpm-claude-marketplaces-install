@@ -15,7 +15,13 @@ import pathlib
 import subprocess
 import sys
 
-from install_claude_marketplaces import discover_plugins
+from install_claude_marketplaces import (
+    discover_marketplace_entries,
+    discover_plugins,
+    get_marketplace_dir,
+    locate_claude_binary,
+    read_marketplace_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -160,3 +166,80 @@ def uninstall_marketplace(claude_bin: str, marketplace_path: pathlib.Path, marke
         any_failures = True
 
     return not any_failures
+
+
+def log_uninstall_summary(marketplaces_processed: int, plugins_uninstalled: int) -> None:
+    """Log a summary of the uninstall run.
+
+    Args:
+        marketplaces_processed: Total number of marketplaces processed.
+        plugins_uninstalled: Number of plugins successfully uninstalled.
+    """
+    logger.info(
+        "Uninstall summary: %d marketplace(s) processed, %d plugin(s) uninstalled",
+        marketplaces_processed,
+        plugins_uninstalled,
+    )
+
+
+def main() -> int:
+    """Orchestrate the uninstall process per spec section 7.7.
+
+    Steps:
+        1. Locate claude binary — locate_claude_binary() calls sys.exit(127) if not found
+        2. Verify marketplace directory exists (return 0 if missing)
+        3. Discover marketplace entries
+        4. For each marketplace: read name, uninstall plugins, remove marketplace
+        5. Log summary with counts
+
+    Returns:
+        0 on success or no work, 1 if any operations failed.
+        Note: sys.exit(127) is raised by locate_claude_binary() if claude is not on PATH.
+    """
+    claude_bin = locate_claude_binary()  # raises SystemExit(127) if not found
+    marketplace_dir = get_marketplace_dir()
+
+    if not marketplace_dir.is_dir():
+        logger.warning(
+            "Marketplace directory does not exist: %s. No marketplaces to uninstall.",
+            marketplace_dir,
+        )
+        return 0
+
+    entries = discover_marketplace_entries(marketplace_dir)
+
+    if not entries:
+        logger.warning("No marketplace entries found. Nothing to uninstall.")
+        return 0
+
+    marketplaces_processed = 0
+    plugins_uninstalled = 0
+    any_failures = False
+
+    for entry in entries:
+        marketplaces_processed += 1
+        marketplace_name = read_marketplace_name(entry)
+        plugins = discover_plugins(entry)
+        success = uninstall_marketplace(claude_bin, entry, marketplace_name)
+        if success:
+            plugins_uninstalled += len(plugins)
+        else:
+            any_failures = True
+
+    log_uninstall_summary(marketplaces_processed, plugins_uninstalled)
+
+    if any_failures:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    _log_level_str = os.environ.get("LOG_LEVEL", "INFO").upper()
+    _log_level_value = getattr(logging, _log_level_str, None)
+    if _log_level_value is None:
+        sys.stderr.write(
+            f"ERROR: Invalid LOG_LEVEL value: {_log_level_str!r}. Must be DEBUG, INFO, WARNING, ERROR, or CRITICAL.\n"
+        )
+        sys.exit(1)
+    logging.basicConfig(level=_log_level_value, format="%(levelname)s: %(message)s")
+    sys.exit(main())
