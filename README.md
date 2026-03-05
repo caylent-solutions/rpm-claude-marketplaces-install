@@ -119,6 +119,7 @@ plugins and uninstalls them, then removes marketplace registrations.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
+| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins. Shared with the install script. Code-level default used when env var is unset. |
 | `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 | `LOG_LEVEL` | No | (code-level) | Logging level for the uninstall script when run as a standalone process. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Invalid values cause exit with code 1. Only applied when invoked via `python3 uninstall_claude_marketplaces.py`. |
 
