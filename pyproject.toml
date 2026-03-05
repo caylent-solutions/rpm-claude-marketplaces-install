@@ -12,6 +12,7 @@ markers = [
 [tool.coverage.run]
 source = ["."]
 omit = ["tests/*"]
+branch = true
 
 [tool.coverage.report]
 show_missing = true

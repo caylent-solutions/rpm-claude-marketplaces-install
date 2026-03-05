@@ -50,6 +50,9 @@ plugins.
 | `CLAUDE_INSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each plugin install subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 | `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 
+For uninstall-specific configuration (`LOG_LEVEL`, `CLAUDE_UNINSTALL_TIMEOUT`), see the
+[Uninstall Configuration](#uninstall-configuration) section.
+
 ### Error Handling (Spec 7.5)
 
 | Condition | Exit Code | Log Level | Behavior |
@@ -116,6 +119,7 @@ plugins and uninstalls them, then removes marketplace registrations.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
+| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins. Shared with the install script. Code-level default used when env var is unset. |
 | `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 | `LOG_LEVEL` | No | (code-level) | Logging level for the uninstall script when run as a standalone process. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Invalid values cause exit with code 1. Only applied when invoked via `python3 uninstall_claude_marketplaces.py`. |
 
@@ -159,7 +163,7 @@ Set `LOG_LEVEL` to control verbosity (default: `INFO`). Valid values: `DEBUG`,
 # Run full validation (lint + format check + tests)
 make validate
 
-# Run all tests with coverage
+# Run all tests with coverage (branch coverage enabled by default)
 make test
 
 # Run unit tests only
@@ -168,6 +172,9 @@ make test-unit
 # Run functional tests only
 make test-functional
 ```
+
+Branch and line coverage are tracked by default. The coverage report shows missing
+lines and partial branches when `make test` or `make validate` is run.
 
 ### Linting and Formatting
 
