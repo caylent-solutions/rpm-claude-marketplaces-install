@@ -52,9 +52,7 @@ class TestMakefileSyntax:
         Spec: Plan: Makefile
         """
         content = makefile_path.read_text()
-        assert "SHELL := /bin/bash" in content, (
-            "Makefile must declare SHELL := /bin/bash"
-        )
+        assert "SHELL := /bin/bash" in content, "Makefile must declare SHELL := /bin/bash"
 
     def test_makefile_has_shellflags(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
@@ -63,9 +61,7 @@ class TestMakefileSyntax:
         Spec: Plan: Makefile
         """
         content = makefile_path.read_text()
-        assert ".SHELLFLAGS := -euo pipefail -c" in content, (
-            "Makefile must declare .SHELLFLAGS := -euo pipefail -c"
-        )
+        assert ".SHELLFLAGS := -euo pipefail -c" in content, "Makefile must declare .SHELLFLAGS := -euo pipefail -c"
 
 
 REQUIRED_PHONY_TARGETS = [
@@ -101,8 +97,7 @@ class TestMakefilePhonyTargets:
 
         for target in REQUIRED_PHONY_TARGETS:
             assert target in phony_targets, (
-                f"Target '{target}' must be declared as .PHONY. "
-                f"Found: {sorted(phony_targets)}"
+                f"Target '{target}' must be declared as .PHONY. Found: {sorted(phony_targets)}"
             )
 
 
@@ -124,9 +119,7 @@ class TestMakefileTargetBehavior:
             timeout=_SUBPROCESS_TIMEOUT,
         )
         assert result.returncode == 0, f"make help failed: {result.stderr}"
-        assert len(result.stdout.strip()) > 0, (
-            "make help must produce non-empty output describing targets"
-        )
+        assert len(result.stdout.strip()) > 0, "make help must produce non-empty output describing targets"
 
     def test_validate_depends_on_check_and_test(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
@@ -152,9 +145,7 @@ class TestMakefileTargetBehavior:
         for line in content.splitlines():
             if line.startswith("check:"):
                 assert "lint" in line, "check target must depend on lint"
-                assert "format-check" in line, (
-                    "check target must depend on format-check"
-                )
+                assert "format-check" in line, "check target must depend on format-check"
                 return
         pytest.fail("check target not found in Makefile")
 

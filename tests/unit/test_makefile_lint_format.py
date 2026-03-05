@@ -42,13 +42,9 @@ class TestMakeLintTarget:
                         return  # Found the tool call
                 else:
                     break  # End of lint recipe
-        pytest.fail(
-            f"lint target must invoke '{tool_name}' but it was not found in the recipe"
-        )
+        pytest.fail(f"lint target must invoke '{tool_name}' but it was not found in the recipe")
 
-    def test_make_lint_exits_nonzero_on_findings(
-        self, repo_root: pathlib.Path, tmp_path: pathlib.Path
-    ):
+    def test_make_lint_exits_nonzero_on_findings(self, repo_root: pathlib.Path, tmp_path: pathlib.Path):
         """Given: A Python file with lint errors exists.
         When: make lint is run.
         Then: It exits non-zero.
@@ -64,12 +60,8 @@ class TestMakeLintTarget:
                 text=True,
                 timeout=_SUBPROCESS_TIMEOUT,
             )
-            assert result.returncode != 0, (
-                "make lint must exit non-zero when lint errors exist"
-            )
-            assert len(result.stdout + result.stderr) > 0, (
-                "make lint must produce output on failure (AC-6)"
-            )
+            assert result.returncode != 0, "make lint must exit non-zero when lint errors exist"
+            assert len(result.stdout + result.stderr) > 0, "make lint must produce output on failure (AC-6)"
         finally:
             bad_file.unlink(missing_ok=True)
 
@@ -96,10 +88,7 @@ class TestMakeFormatTarget:
                         return  # Found ruff format (not --check)
                 else:
                     break
-        pytest.fail(
-            "format target must invoke 'ruff format' "
-            "(without --check) but it was not found"
-        )
+        pytest.fail("format target must invoke 'ruff format' (without --check) but it was not found")
 
 
 @pytest.mark.unit
@@ -115,9 +104,7 @@ class TestMakeCheckTarget:
         content = makefile_path.read_text()
         for line in content.splitlines():
             if line.startswith("check:"):
-                assert "format-check" in line, (
-                    "check target must depend on format-check"
-                )
+                assert "format-check" in line, "check target must depend on format-check"
                 return
         pytest.fail("check target not found in Makefile")
 
@@ -139,9 +126,7 @@ class TestMakeCheckTarget:
                         return
                 else:
                     break
-        pytest.fail(
-            "format-check target must invoke 'ruff format --check' but it was not found"
-        )
+        pytest.fail("format-check target must invoke 'ruff format --check' but it was not found")
 
     def test_make_check_docs_describe_tools(self, makefile_path: pathlib.Path):
         """Given: The Makefile has lint, format, format-check, check targets.
@@ -161,7 +146,4 @@ class TestMakeCheckTarget:
                 if line.startswith(target_prefix) and required_marker in line:
                     found = True
                     break
-            assert found, (
-                f"Target starting with '{target_prefix}' "
-                f"must have a '{required_marker}' help comment"
-            )
+            assert found, f"Target starting with '{target_prefix}' must have a '{required_marker}' help comment"
