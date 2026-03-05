@@ -1,0 +1,6 @@
+{
+  "name": "sample-plugin",
+  "version": "0.1.0",
+  "description": "A sample marketplace plugin for testing install and uninstall workflows.",
+  "author": "test-fixtures"
+}
