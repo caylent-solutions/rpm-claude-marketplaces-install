@@ -563,3 +563,45 @@ class TestUninstallMain:
             exit_code = main()
 
         assert exit_code != 0, "Must return non-zero when marketplace removal fails"
+
+
+@pytest.mark.unit
+class TestUninstallEntryPoint:
+    """Tests for the __main__ entry point block (spec 7.7, LOG_LEVEL validation)."""
+
+    def test_spec_7_7_main_block_invalid_log_level_exits_1(self, capsys):
+        """Verify: __main__ block exits 1 on invalid LOG_LEVEL.
+
+        Given: LOG_LEVEL env var is set to an invalid value
+        When: The __main__ block executes via runpy
+        Then: Writes error to stderr and exits with code 1
+        Spec: Section 7.7 — entry point, Section 7.5 fail-fast
+        """
+        import runpy
+
+        with mock.patch.dict("os.environ", {"LOG_LEVEL": "INVALID"}):
+            with pytest.raises(SystemExit) as exc_info:
+                runpy.run_module(MODULE, run_name="__main__")
+        assert exc_info.value.code == 1, "Must exit 1 on invalid LOG_LEVEL"
+        captured = capsys.readouterr()
+        assert "Invalid LOG_LEVEL" in captured.err, "Must write error to stderr"
+
+    def test_spec_7_7_main_block_valid_log_level_runs_main(self, claude_bin, tmp_path):
+        """Verify: __main__ block with valid LOG_LEVEL calls sys.exit(main()).
+
+        Given: LOG_LEVEL is a valid level and marketplace dir is missing
+        When: The __main__ block executes
+        Then: main() is called and exit code propagated (0 for missing dir)
+        Spec: Section 7.7 — entry point
+        """
+        missing_dir = tmp_path / "no-such-dir"
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=missing_dir),
+            mock.patch.dict("os.environ", {"LOG_LEVEL": "DEBUG"}),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            import runpy
+
+            runpy.run_module(MODULE, run_name="__main__")
+        assert exc_info.value.code == 0, "Must exit 0 when marketplace dir missing"

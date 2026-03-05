@@ -119,6 +119,30 @@ plugins and uninstalls them, then removes marketplace registrations.
 | `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 | `LOG_LEVEL` | No | (code-level) | Logging level for the uninstall script when run as a standalone process. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Invalid values cause exit with code 1. Only applied when invoked via `python3 uninstall_claude_marketplaces.py`. |
 
+## Running the Scripts
+
+### Install
+
+```bash
+python3 install_claude_marketplaces.py
+```
+
+Installs all marketplace plugins found in `CLAUDE_MARKETPLACES_DIR`. Exits 0 on
+success, 1 if any operation failed, or 127 if `claude` is not found on `$PATH`.
+
+### Uninstall
+
+```bash
+python3 uninstall_claude_marketplaces.py
+```
+
+Uninstalls all plugins and removes all marketplace registrations found in
+`CLAUDE_MARKETPLACES_DIR`. Exits 0 on success or if there is nothing to uninstall,
+1 if any operation failed, or 127 if `claude` is not found on `$PATH`.
+
+Set `LOG_LEVEL` to control verbosity (default: `INFO`). Valid values: `DEBUG`,
+`INFO`, `WARNING`, `ERROR`, `CRITICAL`. Invalid values cause exit with code 1.
+
 ## Developer Setup
 
 ### Prerequisites
