@@ -1,0 +1,17 @@
+---
+# yamllint configuration for rpm-claude-marketplaces-install
+#
+# Non-default rules explained:
+# - line-length: disabled — YAML files may contain long values (URLs, descriptions)
+# - truthy: disabled — bare boolean-like keys (e.g. "on:" in GitHub Actions) are valid
+# - document-start: disabled — not all YAML files require "---" document start marker
+
+ignore:
+  - tests/fixtures/
+
+extends: default
+
+rules:
+  document-start: disable
+  truthy: disable
+  line-length: disable

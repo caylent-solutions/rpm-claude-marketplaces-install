@@ -1,0 +1,10 @@
+# This file intentionally contains YAML lint violations.
+# It is used by test_yamllint_catches_known_bad_yaml to verify
+# that the yamllint configuration correctly detects errors.
+# DO NOT fix the violations below.
+
+bad_indent:
+    too_many_spaces: true
+  wrong_indent: also_bad
+duplicate_key: first
+duplicate_key: second
