@@ -25,11 +25,7 @@ class TestMakeTestTarget:
         content = makefile_path.read_text()
         in_test = False
         for line in content.splitlines():
-            if (
-                line.startswith("test:")
-                and "test-unit" not in line
-                and "test-functional" not in line
-            ):
+            if line.startswith("test:") and "test-unit" not in line and "test-functional" not in line:
                 in_test = True
                 continue
             if in_test:
@@ -38,9 +34,7 @@ class TestMakeTestTarget:
                         return  # Found pytest with coverage
                 else:
                     break
-        pytest.fail(
-            "test target must invoke 'pytest' with '--cov' but it was not found"
-        )
+        pytest.fail("test target must invoke 'pytest' with '--cov' but it was not found")
 
     def test_make_test_includes_coverage_report(self, makefile_path: pathlib.Path):
         """Given: The Makefile test target exists.
@@ -51,11 +45,7 @@ class TestMakeTestTarget:
         content = makefile_path.read_text()
         in_test = False
         for line in content.splitlines():
-            if (
-                line.startswith("test:")
-                and "test-unit" not in line
-                and "test-functional" not in line
-            ):
+            if line.startswith("test:") and "test-unit" not in line and "test-functional" not in line:
                 in_test = True
                 continue
             if in_test:
@@ -89,9 +79,7 @@ class TestMakeTestUnitTarget:
                         return
                 else:
                     break
-        pytest.fail(
-            "test-unit target must invoke pytest with '-m unit' but it was not found"
-        )
+        pytest.fail("test-unit target must invoke pytest with '-m unit' but it was not found")
 
 
 @pytest.mark.unit
@@ -112,18 +100,11 @@ class TestMakeTestFunctionalTarget:
                 continue
             if in_target:
                 if line.startswith("\t"):
-                    if (
-                        "-m functional" in line
-                        or "-m 'functional'" in line
-                        or '-m "functional"' in line
-                    ):
+                    if "-m functional" in line or "-m 'functional'" in line or '-m "functional"' in line:
                         return
                 else:
                     break
-        pytest.fail(
-            "test-functional target must invoke pytest with '-m functional' "
-            "but it was not found"
-        )
+        pytest.fail("test-functional target must invoke pytest with '-m functional' but it was not found")
 
 
 @pytest.mark.unit
@@ -159,9 +140,7 @@ class TestPyprojectConfig:
         assert pyproject.exists(), "pyproject.toml must exist"
         content = pyproject.read_text()
         assert "unit" in content, "unit marker must be registered in pyproject.toml"
-        assert "functional" in content, (
-            "functional marker must be registered in pyproject.toml"
-        )
+        assert "functional" in content, "functional marker must be registered in pyproject.toml"
 
     def test_pytest_testpaths_configured(self, repo_root: pathlib.Path):
         """Given: pyproject.toml exists.
@@ -172,9 +151,7 @@ class TestPyprojectConfig:
         pyproject = repo_root / "pyproject.toml"
         content = pyproject.read_text()
         assert "testpaths" in content, "testpaths must be configured in pyproject.toml"
-        assert '"tests"' in content or "'tests'" in content, (
-            "testpaths must include 'tests' directory"
-        )
+        assert '"tests"' in content or "'tests'" in content, "testpaths must include 'tests' directory"
 
     def test_coverage_configured(self, repo_root: pathlib.Path):
         """Given: pyproject.toml exists.
@@ -184,9 +161,7 @@ class TestPyprojectConfig:
         """
         pyproject = repo_root / "pyproject.toml"
         content = pyproject.read_text()
-        assert "[tool.coverage.run]" in content, (
-            "coverage.run section must exist in pyproject.toml"
-        )
+        assert "[tool.coverage.run]" in content, "coverage.run section must exist in pyproject.toml"
         assert "omit" in content, "coverage must omit test files"
 
     def test_pyproject_has_marker_comments(self, repo_root: pathlib.Path):
@@ -208,7 +183,4 @@ class TestPyprojectConfig:
                 break
             if in_markers and line.strip() == "]":
                 break
-        assert has_comment, (
-            "pyproject.toml markers section must include comments "
-            "explaining marker usage (AC-DOC-1)"
-        )
+        assert has_comment, "pyproject.toml markers section must include comments explaining marker usage (AC-DOC-1)"

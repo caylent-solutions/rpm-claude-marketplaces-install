@@ -1,0 +1,22 @@
+# Ruff configuration for rpm-claude-marketplaces-install
+# Install and uninstall scripts for Claude Code marketplace plugins
+
+target-version = "py311"
+line-length = 120
+
+# Exclude test fixtures containing intentionally bad code
+extend-exclude = [
+    "tests/fixtures/",
+]
+
+[lint]
+# Enable pyflakes (F), pycodestyle errors (E), and isort (I) rules.
+# F catches unused imports, undefined names, and other common errors.
+# E catches style violations like whitespace issues and syntax errors.
+# I enforces consistent import ordering.
+select = ["F", "E", "I"]
+
+[format]
+# Use double quotes and space indentation (PEP 8 / Black-compatible style)
+indent-style = "space"
+quote-style = "double"
