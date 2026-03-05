@@ -159,7 +159,7 @@ Set `LOG_LEVEL` to control verbosity (default: `INFO`). Valid values: `DEBUG`,
 # Run full validation (lint + format check + tests)
 make validate
 
-# Run all tests with coverage
+# Run all tests with coverage (branch coverage enabled by default)
 make test
 
 # Run unit tests only
@@ -168,6 +168,9 @@ make test-unit
 # Run functional tests only
 make test-functional
 ```
+
+Branch and line coverage are tracked by default. The coverage report shows missing
+lines and partial branches when `make test` or `make validate` is run.
 
 ### Linting and Formatting
 
