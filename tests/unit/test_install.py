@@ -156,6 +156,18 @@ class TestMarketplaceDirVerification:
         warning_messages = [r.message.lower() for r in caplog.records if r.levelno >= logging.WARNING]
         assert any("marketplace" in msg for msg in warning_messages), "Warning must mention marketplace directory"
 
+    def test_spec_7_4_step4_marketplace_dir_exists_returns_normally(self, tmp_path):
+        """Verify no exit when marketplace directory exists.
+
+        Given: Marketplace directory exists
+        When: verify_marketplace_dir() is called
+        Then: Function returns normally (no SystemExit)
+        Spec: Section 7.4 Step 4
+        """
+        from install_claude_marketplaces import verify_marketplace_dir
+
+        verify_marketplace_dir(tmp_path)
+
 
 @pytest.mark.unit
 class TestDiscoverMarketplaceEntries:
@@ -211,6 +223,23 @@ class TestDiscoverMarketplaceEntries:
         result = discover_marketplace_entries(tmp_path)
         names = [p.name for p in result]
         assert "linked-marketplace" in names
+
+    def test_spec_7_4_step5_discover_excludes_regular_files(self, tmp_path):
+        """Verify regular files are excluded from discovered entries.
+
+        Given: Marketplace dir contains a regular file and a directory
+        When: discover_marketplace_entries() is called
+        Then: Only the directory is returned, not the file
+        Spec: Section 7.4 Step 5
+        """
+        from install_claude_marketplaces import discover_marketplace_entries
+
+        (tmp_path / "valid-dir").mkdir()
+        (tmp_path / "regular-file.txt").write_text("not a directory")
+        result = discover_marketplace_entries(tmp_path)
+        names = [p.name for p in result]
+        assert "valid-dir" in names
+        assert "regular-file.txt" not in names
 
     def test_spec_7_4_step5_empty_dir_returns_empty_list(self, tmp_path):
         """Verify empty directory returns empty list.
