@@ -8,7 +8,7 @@ help: ## Show available targets and their descriptions
 
 lint: ## Run all linters (ruff check, markdownlint, yamllint)
 	ruff check .
-	markdownlint '**/*.md'
+	markdownlint --ignore tests/fixtures '**/*.md'
 	yamllint .
 
 format: ## Auto-fix formatting issues (ruff format)

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/main/schema/markdownlint-config-schema.json",
+  "comment-non-default-rules": "MD013 (line length) disabled because documentation lines may exceed 80 chars for readability. MD033 (inline HTML) disabled to allow HTML comments in markdown. All other rules enabled by default.",
+  "default": true,
+  "MD013": false,
+  "MD033": false
+}
