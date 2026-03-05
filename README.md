@@ -28,12 +28,16 @@ plugins.
 - `register_marketplace(claude_bin, path)` — Registers a marketplace directory
   with the Claude CLI. Returns `True` on success, `False` on failure.
   Idempotent — re-registering an already-registered marketplace succeeds.
+- `register_all_marketplaces(claude_bin, entries)` — Registers all marketplace
+  entries, logging and skipping individual failures per spec section 7.5.
+  Exits with code 1 if any registration failed.
 
 ### Configuration
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Directory containing marketplace plugins |
+| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins |
+| `CLAUDE_REGISTER_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each marketplace registration subprocess. Invalid values cause exit with code 1. |
 
 ## Developer Setup
 
