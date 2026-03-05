@@ -28,9 +28,6 @@ plugins.
 - `register_marketplace(claude_bin, path)` — Registers a marketplace directory
   with the Claude CLI. Returns `True` on success, `False` on failure.
   Idempotent — re-registering an already-registered marketplace succeeds.
-- `register_all_marketplaces(claude_bin, entries)` — Registers all marketplace
-  entries, logging and skipping individual failures per spec section 7.5.
-  Exits with code 1 if any registration failed.
 - `discover_plugins(marketplace_path)` — Discovers plugins within a marketplace
   directory by scanning immediate subdirectories for
   `.claude-plugin/plugin.json`. Returns a list of `(plugin_name, plugin_path)`
