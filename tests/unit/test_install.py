@@ -861,3 +861,225 @@ class TestMainOrchestration:
         ):
             exit_code = main()
             assert exit_code != 0
+
+
+@pytest.mark.unit
+class TestErrorHandlingTable:
+    """Tests for every error condition in spec 7.5 error table.
+
+    Each test validates: exit code, log level, and continuation behavior
+    for one row of the spec 7.5 error handling table.
+    """
+
+    def test_spec_7_5_row1_claude_not_found_exit_127(self, caplog):
+        """Verify: Claude binary not found → Exit 127 with error message.
+
+        Given: shutil.which("claude") returns None
+        When: locate_claude_binary() is called
+        Then: sys.exit(127) is raised AND an ERROR log is produced
+        Spec: Section 7.5 row 1
+        """
+        with mock.patch(f"{MODULE}.shutil.which", return_value=None):
+            with pytest.raises(SystemExit) as exc_info:
+                locate_claude_binary()
+            assert exc_info.value.code == 127
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_records) >= 1, "Must log at ERROR level"
+        assert "claude" in error_records[0].message.lower()
+
+    def test_spec_7_5_row2_marketplace_dir_missing_exit_0_warning(self, tmp_path, caplog):
+        """Verify: Marketplace dir missing → Exit 0 with warning.
+
+        Given: Marketplace directory does not exist
+        When: verify_marketplace_dir() is called
+        Then: sys.exit(0) is raised AND a WARNING log is produced
+        Spec: Section 7.5 row 2
+        """
+        from install_claude_marketplaces import verify_marketplace_dir
+
+        nonexistent = tmp_path / "nonexistent"
+        with pytest.raises(SystemExit) as exc_info:
+            verify_marketplace_dir(nonexistent)
+        assert exc_info.value.code == 0
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) >= 1, "Must log at WARNING level (not ERROR)"
+
+    def test_spec_7_5_row3_no_entries_exit_0_warning(self, tmp_path, monkeypatch, caplog):
+        """Verify: No marketplace entries found → Exit 0 with warning.
+
+        Given: Marketplace directory exists but is empty
+        When: main() is called
+        Then: Returns 0 AND a WARNING log is produced
+        Spec: Section 7.5 row 3
+        """
+        from install_claude_marketplaces import main
+
+        marketplace_dir = tmp_path / "empty"
+        marketplace_dir.mkdir()
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(marketplace_dir))
+        with mock.patch(f"{MODULE}.shutil.which", return_value="/usr/local/bin/claude"):
+            exit_code = main()
+            assert exit_code == 0
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) >= 1, "Must log warning when no entries found"
+
+    def test_spec_7_5_row4_broken_symlink_log_error_continue(self, tmp_path, caplog):
+        """Verify: Broken symlink → Log warning and continue to next entry.
+
+        Given: Marketplace dir has a broken symlink and a valid dir
+        When: discover_marketplace_entries() is called
+        Then: Broken symlink is excluded, valid dir is returned, WARNING logged
+        Spec: Section 7.5 row 4
+        """
+        from install_claude_marketplaces import discover_marketplace_entries
+
+        valid = tmp_path / "valid"
+        valid.mkdir()
+        broken = tmp_path / "broken-link"
+        broken.symlink_to(tmp_path / "nonexistent")
+
+        result = discover_marketplace_entries(tmp_path)
+        assert len(result) == 1, "Must continue past broken symlink"
+        assert result[0].name == "valid"
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("broken" in r.message.lower() or "symlink" in r.message.lower() for r in warning_records)
+
+    def test_spec_7_5_row5_marketplace_add_fails_log_error_continue(self, tmp_path, claude_bin, caplog):
+        """Verify: marketplace add fails → Log error for that entry, continue.
+
+        Given: subprocess for marketplace add returns non-zero
+        When: register_marketplace() is called
+        Then: Returns False AND an ERROR log is produced (caller continues)
+        Spec: Section 7.5 row 5
+        """
+        from install_claude_marketplaces import register_marketplace
+
+        marketplace = tmp_path / "fail-market"
+        marketplace.mkdir()
+        mock_result = mock.Mock(returncode=1, stdout="", stderr="add failed")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = register_marketplace(claude_bin, marketplace)
+        assert result is False, "Must return False (not raise)"
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_records) >= 1, "Must log at ERROR level"
+
+    def test_spec_7_5_row6_plugin_install_fails_log_error_continue(self, claude_bin, caplog):
+        """Verify: plugin install fails → Log error for that plugin, continue.
+
+        Given: subprocess for plugin install returns non-zero
+        When: install_plugin() is called
+        Then: Returns False AND an ERROR log is produced (caller continues)
+        Spec: Section 7.5 row 6
+        """
+        from install_claude_marketplaces import install_plugin
+
+        mock_result = mock.Mock(returncode=1, stdout="", stderr="install error")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = install_plugin(claude_bin, "bad-plugin", "test-market")
+        assert result is False, "Must return False (not raise)"
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_records) >= 1, "Must log at ERROR level"
+        assert any("bad-plugin" in r.message for r in error_records), "Log must include plugin name"
+
+    def test_spec_7_5_row7_mixed_failures_exit_nonzero_with_summary(self, tmp_path, monkeypatch, caplog):
+        """Verify: All entries processed with failures → Exit non-zero with summary.
+
+        Given: One marketplace with two plugins, one install fails
+        When: main() is called
+        Then: Returns non-zero AND summary log includes counts
+        Spec: Section 7.5 row 7
+        """
+        from install_claude_marketplaces import main
+
+        caplog.set_level(logging.INFO)
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        market = marketplace_dir / "mixed"
+        market.mkdir()
+        _setup_marketplace_with_plugins(market, "mixed", ["good-plug", "bad-plug"])
+
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(marketplace_dir))
+
+        def mock_run_side_effect(cmd, **kwargs):
+            if "marketplace" in cmd and "add" in cmd:
+                return mock.Mock(returncode=0, stdout="ok", stderr="")
+            if "bad-plug" in str(cmd):
+                return mock.Mock(returncode=1, stdout="", stderr="failed")
+            return mock.Mock(returncode=0, stdout="ok", stderr="")
+
+        with (
+            mock.patch(f"{MODULE}.shutil.which", return_value="/usr/local/bin/claude"),
+            mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect),
+        ):
+            exit_code = main()
+        assert exit_code != 0, "Must exit non-zero when any failure occurs"
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("summary" in r.message.lower() for r in info_records), "Must log summary"
+
+    def test_spec_7_5_row8_all_success_exit_0_with_summary(self, tmp_path, monkeypatch, caplog):
+        """Verify: All entries processed successfully → Exit 0 with success summary.
+
+        Given: One marketplace with one plugin, all succeed
+        When: main() is called
+        Then: Returns 0 AND summary log is produced
+        Spec: Section 7.5 row 8
+        """
+        from install_claude_marketplaces import main
+
+        caplog.set_level(logging.INFO)
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        market = marketplace_dir / "good-market"
+        market.mkdir()
+        _setup_marketplace_with_plugins(market, "good-market", ["good-plugin"])
+
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(marketplace_dir))
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{MODULE}.shutil.which", return_value="/usr/local/bin/claude"),
+            mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            exit_code = main()
+        assert exit_code == 0, "Must exit 0 on all success"
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("summary" in r.message.lower() for r in info_records), "Must log summary"
+
+
+@pytest.mark.unit
+class TestLoggingConfiguration:
+    """Tests for logging configuration per spec 7.4 Steps 1-2."""
+
+    def test_spec_7_4_step1_logging_configured(self, tmp_path, monkeypatch):
+        """Verify main() configures Python logging module.
+
+        Given: No prior logging configuration
+        When: main() is called
+        Then: logging.basicConfig is invoked
+        Spec: Section 7.4 Step 1-2
+        """
+        from install_claude_marketplaces import main
+
+        marketplace_dir = tmp_path / "markets"
+        marketplace_dir.mkdir()
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(marketplace_dir))
+        with (
+            mock.patch(f"{MODULE}.shutil.which", return_value="/usr/local/bin/claude"),
+            mock.patch(f"{MODULE}.logging.basicConfig") as mock_config,
+        ):
+            main()
+            mock_config.assert_called_once()
+
+    def test_spec_7_4_step2_uses_logging_module_not_print(self):
+        """Verify install script uses logging module, not print().
+
+        Given: The install_claude_marketplaces module
+        When: Its source code is inspected
+        Then: No print() calls are found (only logging.* calls)
+        Spec: Section 7.4 Step 2
+        """
+        import inspect
+
+        import install_claude_marketplaces
+
+        source = inspect.getsource(install_claude_marketplaces)
+        assert "print(" not in source, "Module must use logging, not print()"
