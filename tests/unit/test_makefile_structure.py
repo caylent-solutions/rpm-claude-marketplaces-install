@@ -28,9 +28,7 @@ class TestMakefileSyntax:
         When: We check for the Makefile.
         Then: It exists at the repo root.
         """
-        assert makefile_path.is_file(), (
-            f"Makefile must exist at {makefile_path}"
-        )
+        assert makefile_path.is_file(), f"Makefile must exist at {makefile_path}"
 
     def test_makefile_syntax_valid(self, repo_root: pathlib.Path):
         """Given: The Makefile exists.
@@ -45,9 +43,7 @@ class TestMakefileSyntax:
             text=True,
             timeout=_SUBPROCESS_TIMEOUT,
         )
-        assert result.returncode == 0, (
-            f"Makefile syntax is invalid: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Makefile syntax is invalid: {result.stderr}"
 
     def test_makefile_has_bash_shell(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
@@ -90,9 +86,7 @@ REQUIRED_PHONY_TARGETS = [
 class TestMakefilePhonyTargets:
     """Verify all required targets are declared as .PHONY."""
 
-    def test_makefile_has_all_phony_targets(
-        self, makefile_path: pathlib.Path
-    ):
+    def test_makefile_has_all_phony_targets(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
         When: We parse .PHONY declarations.
         Then: All required targets are declared.
@@ -129,16 +123,12 @@ class TestMakefileTargetBehavior:
             text=True,
             timeout=_SUBPROCESS_TIMEOUT,
         )
-        assert result.returncode == 0, (
-            f"make help failed: {result.stderr}"
-        )
+        assert result.returncode == 0, f"make help failed: {result.stderr}"
         assert len(result.stdout.strip()) > 0, (
             "make help must produce non-empty output describing targets"
         )
 
-    def test_validate_depends_on_check_and_test(
-        self, makefile_path: pathlib.Path
-    ):
+    def test_validate_depends_on_check_and_test(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
         When: We read the validate target.
         Then: It depends on check and test.
@@ -147,18 +137,12 @@ class TestMakefileTargetBehavior:
         content = makefile_path.read_text()
         for line in content.splitlines():
             if line.startswith("validate:"):
-                assert "check" in line, (
-                    "validate target must depend on check"
-                )
-                assert "test" in line, (
-                    "validate target must depend on test"
-                )
+                assert "check" in line, "validate target must depend on check"
+                assert "test" in line, "validate target must depend on test"
                 return
         pytest.fail("validate target not found in Makefile")
 
-    def test_check_depends_on_lint_and_format_check(
-        self, makefile_path: pathlib.Path
-    ):
+    def test_check_depends_on_lint_and_format_check(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
         When: We read the check target.
         Then: It depends on lint and format-check.
@@ -167,9 +151,7 @@ class TestMakefileTargetBehavior:
         content = makefile_path.read_text()
         for line in content.splitlines():
             if line.startswith("check:"):
-                assert "lint" in line, (
-                    "check target must depend on lint"
-                )
+                assert "lint" in line, "check target must depend on lint"
                 assert "format-check" in line, (
                     "check target must depend on format-check"
                 )
@@ -204,22 +186,14 @@ class TestMakefileTargetBehavior:
             text=True,
             timeout=_SUBPROCESS_TIMEOUT,
         )
-        assert result.returncode == 0, (
-            f"make clean failed: {result.stderr}"
-        )
+        assert result.returncode == 0, f"make clean failed: {result.stderr}"
 
         for artifact in artifacts:
             artifact_path = repo_root / artifact
-            assert not artifact_path.exists(), (
-                f"make clean should remove {artifact}"
-            )
-        assert not coverage_file.exists(), (
-            "make clean should remove .coverage"
-        )
+            assert not artifact_path.exists(), f"make clean should remove {artifact}"
+        assert not coverage_file.exists(), "make clean should remove .coverage"
 
-    def test_each_target_has_help_comment(
-        self, makefile_path: pathlib.Path
-    ):
+    def test_each_target_has_help_comment(self, makefile_path: pathlib.Path):
         """Given: The Makefile exists.
         When: We read target definitions.
         Then: Each target has a ## comment describing its purpose.
@@ -232,14 +206,7 @@ class TestMakefileTargetBehavior:
                 if line.startswith(f"{target}:") and "##" in line:
                     found = True
                     break
-                if (
-                    line.startswith(f"{target}:")
-                    and "##" not in line
-                ):
+                if line.startswith(f"{target}:") and "##" not in line:
                     # Target exists but no help comment
-                    pytest.fail(
-                        f"Target '{target}' exists but has no ## help comment"
-                    )
-            assert found, (
-                f"Target '{target}' must have a ## help comment"
-            )
+                    pytest.fail(f"Target '{target}' exists but has no ## help comment")
+            assert found, f"Target '{target}' must have a ## help comment"
