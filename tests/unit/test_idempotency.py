@@ -38,12 +38,6 @@ def _setup_marketplace_with_plugins(
 
 
 @pytest.fixture()
-def claude_bin(tmp_path):
-    """Provide a dynamically constructed path to the claude binary for tests."""
-    return str(tmp_path / "bin" / "claude")
-
-
-@pytest.fixture()
 def idempotency_env(tmp_path, monkeypatch):
     """Set up a marketplace environment for idempotency tests.
 
@@ -338,6 +332,9 @@ class TestUninstallIdempotency:
             uninstall_main()
             caplog.clear()
             uninstall_main()
+        # caplog captures all error output from main(): the only sys.stderr.write in
+        # uninstall_claude_marketplaces is in the __main__ guard block (line ~240) for
+        # LOG_LEVEL validation, which is never executed when calling main() directly.
         error_logs = [r for r in caplog.records if r.levelno >= logging.ERROR]
         assert len(error_logs) == 0, f"Second run must produce no error logs: {[r.message for r in error_logs]}"
 

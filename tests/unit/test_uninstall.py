@@ -39,12 +39,6 @@ def _setup_marketplace_with_plugins(
         (plugin_meta / "plugin.json").write_text(json.dumps({"name": plugin_name}))
 
 
-@pytest.fixture()
-def claude_bin():
-    """Provide a configurable path to the claude binary for tests."""
-    return "/usr/local/bin/claude"
-
-
 @pytest.mark.unit
 class TestPluginUninstall:
     """Tests for plugin uninstall functionality (spec 7.7 step 4c)."""

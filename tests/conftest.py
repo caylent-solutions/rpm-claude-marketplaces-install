@@ -4,6 +4,7 @@ Provides common fixtures for testing install/uninstall scripts:
 - repo_root / makefile_path: repository path fixtures
 - mock_marketplace_dir: temporary directory with sample marketplace structure
 - mock_claude_cli: callable mock simulating the claude CLI
+- claude_bin: configurable path to the claude binary for tests
 """
 
 import pathlib
@@ -73,3 +74,13 @@ def mock_claude_cli():
         )
 
     return _mock_cli
+
+
+@pytest.fixture()
+def claude_bin(tmp_path: pathlib.Path) -> str:
+    """Provide a dynamically constructed path to the claude binary for tests.
+
+    Returns a path under tmp_path so it is unique per test and never
+    hard-codes a real filesystem location.
+    """
+    return str(tmp_path / "bin" / "claude")
