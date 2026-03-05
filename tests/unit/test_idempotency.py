@@ -38,9 +38,9 @@ def _setup_marketplace_with_plugins(
 
 
 @pytest.fixture()
-def claude_bin():
-    """Provide a configurable path to the claude binary for tests."""
-    return "/usr/local/bin/claude"
+def claude_bin(tmp_path):
+    """Provide a dynamically constructed path to the claude binary for tests."""
+    return str(tmp_path / "bin" / "claude")
 
 
 @pytest.fixture()
@@ -264,7 +264,11 @@ class TestUninstallIdempotency:
 
         missing_dir = tmp_path / "no-such-dir"
         monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(missing_dir))
-        with mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin):
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{UNINSTALL_MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{UNINSTALL_MODULE}.subprocess.run", return_value=mock_result),
+        ):
             exit_code = uninstall_main()
         assert exit_code == 0, "Uninstall when nothing installed must exit 0"
 
