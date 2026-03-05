@@ -556,6 +556,26 @@ class TestDiscoverPlugins:
         assert len(result) == 1
         assert result[0][0] == "valid"
 
+    def test_spec_7_4_step6d_discover_plugins_skips_regular_files(self, tmp_path):
+        """Verify discover_plugins() skips regular files in marketplace directory.
+
+        Given: Marketplace dir with a regular file and a valid plugin subdir
+        When: discover_plugins() is called
+        Then: Only the plugin subdir is returned, regular file is skipped
+        Spec: Section 7.4 Step 6d
+        """
+        from install_claude_marketplaces import discover_plugins
+
+        plugin_dir = tmp_path / "real-plugin"
+        plugin_dir.mkdir()
+        _write_plugin_json(plugin_dir, "real")
+
+        (tmp_path / "not-a-dir.txt").write_text("just a file")
+
+        result = discover_plugins(tmp_path)
+        assert len(result) == 1
+        assert result[0][0] == "real"
+
 
 @pytest.mark.unit
 class TestInstallPlugin:
@@ -636,6 +656,21 @@ class TestInstallPlugin:
         ):
             result = install_plugin(claude_bin, "slow-plugin", "my-market")
             assert result is False
+
+    def test_spec_7_3_invalid_install_timeout_env_exits(self, claude_bin):
+        """Verify invalid CLAUDE_INSTALL_TIMEOUT exits with code 1.
+
+        Given: CLAUDE_INSTALL_TIMEOUT is set to a non-integer value
+        When: install_plugin() is called
+        Then: sys.exit(1) is raised
+        Spec: Section 7.3 (configuration validation)
+        """
+        from install_claude_marketplaces import install_plugin
+
+        with mock.patch.dict("os.environ", {"CLAUDE_INSTALL_TIMEOUT": "abc"}):
+            with pytest.raises(SystemExit) as exc_info:
+                install_plugin(claude_bin, "any-plugin", "any-market")
+            assert exc_info.value.code == 1
 
 
 @pytest.mark.unit
@@ -779,3 +814,50 @@ class TestMainOrchestration:
             assert exit_code == 0
             # 2 marketplace registrations + 3 plugin installs = 5 subprocess calls
             assert mock_run.call_count == 5
+
+    def test_spec_7_5_no_entries_returns_zero(self, tmp_path, monkeypatch):
+        """Verify main() returns 0 when no marketplace entries are found.
+
+        Given: Marketplace dir exists but is empty
+        When: main() is called
+        Then: Returns 0 (no work to do)
+        Spec: Section 7.5
+        """
+        from install_claude_marketplaces import main
+
+        marketplace_dir = tmp_path / "empty-marketplaces"
+        marketplace_dir.mkdir()
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(marketplace_dir))
+        with mock.patch(f"{MODULE}.shutil.which", return_value="/usr/local/bin/claude"):
+            exit_code = main()
+            assert exit_code == 0
+
+    def test_spec_7_5_registration_failure_returns_nonzero(self, tmp_path, monkeypatch):
+        """Verify main() returns non-zero when marketplace registration fails.
+
+        Given: One marketplace whose registration fails but plugins succeed
+        When: main() is called
+        Then: Returns non-zero exit code
+        Spec: Section 7.5
+        """
+        from install_claude_marketplaces import main
+
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        market = marketplace_dir / "bad-reg-market"
+        market.mkdir()
+        _setup_marketplace_with_plugins(market, "bad-reg-market", ["good-plugin"])
+
+        monkeypatch.setenv("CLAUDE_MARKETPLACES_DIR", str(marketplace_dir))
+
+        def mock_run_side_effect(cmd, **kwargs):
+            if "marketplace" in cmd and "add" in cmd:
+                return mock.Mock(returncode=1, stdout="", stderr="reg failed")
+            return mock.Mock(returncode=0, stdout="ok", stderr="")
+
+        with (
+            mock.patch(f"{MODULE}.shutil.which", return_value="/usr/local/bin/claude"),
+            mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect),
+        ):
+            exit_code = main()
+            assert exit_code != 0
