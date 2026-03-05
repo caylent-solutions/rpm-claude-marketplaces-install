@@ -45,9 +45,29 @@ plugins.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins |
-| `CLAUDE_REGISTER_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each marketplace registration subprocess. Invalid values cause exit with code 1. |
-| `CLAUDE_INSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each plugin install subprocess. Invalid values cause exit with code 1. |
+| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins. Code-level default used when env var is unset. |
+| `CLAUDE_REGISTER_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each marketplace registration subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `CLAUDE_INSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each plugin install subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+
+### Error Handling (Spec 7.5)
+
+| Condition | Exit Code | Log Level | Behavior |
+| --- | --- | --- | --- |
+| `claude` binary not found on `$PATH` | 127 | ERROR | Abort immediately |
+| Marketplace directory does not exist | 0 | WARNING | Exit gracefully (no work to do) |
+| No marketplace entries found | 0 | WARNING | Return 0 (no work to do) |
+| Broken symlink in marketplace directory | N/A | WARNING | Skip entry, continue processing |
+| `marketplace add` subprocess fails | N/A | ERROR | Log error, continue to next marketplace |
+| `plugin install` subprocess fails | N/A | ERROR | Log error, continue to next plugin |
+| Mixed successes and failures | 1 | INFO | Log summary, exit 1 |
+| All operations succeed | 0 | INFO | Log summary, exit 0 |
+
+### Logging
+
+The install script configures logging via `logging.basicConfig()` at the
+start of `main()`. All output uses the Python `logging` module — `print()`
+is never used. Log messages include relevant context such as file paths,
+marketplace names, and plugin identifiers.
 
 ## Developer Setup
 
