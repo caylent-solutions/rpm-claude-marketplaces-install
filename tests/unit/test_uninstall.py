@@ -17,6 +17,8 @@ from unittest import mock
 
 import pytest
 
+from uninstall_claude_marketplaces import main, remove_marketplace
+
 MODULE = "uninstall_claude_marketplaces"
 
 
@@ -315,3 +317,249 @@ class TestUninstallCoverage:
         with mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect):
             result = uninstall_marketplace(claude_bin, marketplace_dir, "test-market")
         assert result is False
+
+
+@pytest.mark.unit
+class TestMarketplaceDeregistration:
+    """Tests for marketplace deregistration (spec 7.7 step 4d)."""
+
+    def test_spec_7_7_step4d_remove_marketplace_correct_command(self, claude_bin, tmp_path):
+        """Verify: remove_marketplace() runs the correct subprocess command.
+
+        Given: A mocked CLI
+        When: remove_marketplace() is called with a marketplace path
+        Then: Subprocess is called with 'claude plugin marketplace remove <path>'
+        Spec: Section 7.7 Step 4d
+        """
+        market_path = tmp_path / "my-market"
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result) as mock_run:
+            remove_marketplace(claude_bin, market_path)
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd == [claude_bin, "plugin", "marketplace", "remove", str(market_path)]
+
+    def test_spec_7_7_step4d_remove_marketplace_failure_returns_false(self, claude_bin, tmp_path, caplog):
+        """Verify: remove_marketplace() returns False on failure without raising.
+
+        Given: A mocked CLI that returns non-zero exit code
+        When: remove_marketplace() is called
+        Then: Returns False AND logs ERROR (does not raise)
+        Spec: Section 7.7 Step 4d, Section 7.5 error handling
+        """
+        mock_result = mock.Mock(returncode=1, stdout="", stderr="removal error")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = remove_marketplace(claude_bin, tmp_path / "bad-market")
+        assert result is False, "Must return False on failure (not raise)"
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_records) >= 1, "Must log at ERROR level"
+
+    def test_spec_7_7_step4d_remove_marketplace_failure_continues(self, claude_bin, tmp_path, caplog):
+        """Verify: Failed removal logs error and caller can continue processing.
+
+        Given: A mocked CLI that fails to remove a marketplace
+        When: remove_marketplace() is called
+        Then: Returns False with ERROR log including marketplace path
+        Spec: Section 7.5 — marketplace remove fails → log error, continue
+        """
+        market_path = tmp_path / "failing-market"
+        mock_result = mock.Mock(returncode=1, stdout="", stderr="not registered")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = remove_marketplace(claude_bin, market_path)
+        assert result is False, "Must return False (not raise)"
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any(str(market_path) in r.message for r in error_records), "Error log must include marketplace path"
+
+    def test_spec_7_7_remove_already_removed_noop(self, claude_bin, tmp_path):
+        """Verify: Removing an already-removed marketplace is a no-op.
+
+        Given: A mocked CLI that returns success (already removed)
+        When: remove_marketplace() is called
+        Then: Returns True (CLI treats re-removal as success)
+        Spec: Section 7.7 — idempotent removal
+        """
+        mock_result = mock.Mock(returncode=0, stdout="already removed", stderr="")
+        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
+            result = remove_marketplace(claude_bin, tmp_path / "already-gone")
+        assert result is True, "Already-removed marketplace should succeed (no-op)"
+
+
+@pytest.mark.unit
+class TestUninstallMain:
+    """Tests for uninstall main() orchestration (spec 7.7 steps 1-5)."""
+
+    def test_spec_7_7_main_orchestrates_full_uninstall(self, tmp_path, claude_bin, caplog):
+        """Verify: main() orchestrates the full uninstall process.
+
+        Given: A marketplace directory with marketplaces and plugins
+        When: main() is called
+        Then: It discovers marketplaces, uninstalls plugins, removes marketplaces
+        Spec: Section 7.7 — full uninstall orchestration
+        """
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        _setup_marketplace_with_plugins(
+            marketplace_dir / "market-a",
+            "market-a",
+            ["plug-1"],
+        )
+
+        caplog.set_level(logging.INFO)
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=marketplace_dir),
+            mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result) as mock_run,
+        ):
+            exit_code = main()
+
+        assert exit_code == 0, "Must return 0 on full success"
+        assert mock_run.call_count >= 2, "Must call subprocess at least twice (uninstall + remove)"
+
+    def test_spec_7_7_main_claude_not_found_exit_127(self):
+        """Verify: main() exits 127 when claude binary is not found.
+
+        Given: locate_claude_binary() calls sys.exit(127)
+        When: main() is called
+        Then: SystemExit with code 127 is raised
+        Spec: Section 7.7 Step 1, Section 7.5
+        """
+        with mock.patch(
+            f"{MODULE}.locate_claude_binary",
+            side_effect=SystemExit(127),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 127, "Must exit 127 when claude not found"
+
+    def test_spec_7_7_main_marketplace_dir_missing_exit_0(self, tmp_path, claude_bin, caplog):
+        """Verify: main() exits 0 when marketplace directory is missing.
+
+        Given: Marketplace directory does not exist
+        When: main() is called
+        Then: Returns 0 (nothing to uninstall)
+        Spec: Section 7.7 Step 2, Section 7.5
+        """
+        missing_dir = tmp_path / "nonexistent"
+        caplog.set_level(logging.INFO)
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=missing_dir),
+        ):
+            exit_code = main()
+
+        assert exit_code == 0, "Must return 0 when marketplace dir missing"
+
+    def test_spec_7_7_step5_summary_log_counts(self, tmp_path, claude_bin, caplog):
+        """Verify: main() logs a summary with counts of processed items.
+
+        Given: A marketplace with plugins that all uninstall successfully
+        When: main() completes
+        Then: Summary log includes marketplace and plugin counts
+        Spec: Section 7.7 Step 5
+        """
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        _setup_marketplace_with_plugins(
+            marketplace_dir / "market-a",
+            "market-a",
+            ["plug-1", "plug-2"],
+        )
+
+        caplog.set_level(logging.INFO)
+        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=marketplace_dir),
+            mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result),
+        ):
+            main()
+
+        info_records = [r for r in caplog.records if r.levelno >= logging.INFO]
+        summary_messages = [r.message.lower() for r in info_records]
+        has_summary = any("summary" in m or ("marketplace" in m and "plugin" in m) for m in summary_messages)
+        assert has_summary, "Must log a summary with marketplace and plugin counts"
+
+    def test_spec_7_7_main_mixed_failures_exit_nonzero(self, tmp_path, claude_bin, caplog):
+        """Verify: main() returns non-zero when some operations fail.
+
+        Given: A marketplace where plugin uninstall fails but removal succeeds
+        When: main() completes
+        Then: Returns non-zero exit code
+        Spec: Section 7.7, Section 7.5
+        """
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        _setup_marketplace_with_plugins(
+            marketplace_dir / "market-a",
+            "market-a",
+            ["plug-1"],
+        )
+
+        caplog.set_level(logging.INFO)
+
+        def mock_run_side_effect(cmd, **kwargs):
+            if "uninstall" in cmd:
+                return mock.Mock(returncode=1, stdout="", stderr="fail")
+            return mock.Mock(returncode=0, stdout="ok", stderr="")
+
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=marketplace_dir),
+            mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect),
+        ):
+            exit_code = main()
+
+        assert exit_code != 0, "Must return non-zero when any operation fails"
+
+    def test_spec_7_7_main_no_entries_exit_0(self, tmp_path, claude_bin, caplog):
+        """Verify: main() exits 0 when marketplace directory exists but has no entries.
+
+        Given: Marketplace directory exists but contains no subdirectories
+        When: main() is called
+        Then: Returns 0 (nothing to uninstall)
+        Spec: Section 7.7 Step 3
+        """
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        caplog.set_level(logging.INFO)
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=marketplace_dir),
+        ):
+            exit_code = main()
+        assert exit_code == 0, "Must return 0 when no marketplace entries found"
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("no marketplace entries" in r.message.lower() for r in warning_records)
+
+    def test_spec_7_7_main_remove_fails_exit_nonzero(self, tmp_path, claude_bin, caplog):
+        """Verify: main() returns non-zero when marketplace removal fails.
+
+        Given: A marketplace where plugin uninstall succeeds but marketplace removal fails
+        When: main() completes
+        Then: Returns non-zero exit code
+        Spec: Section 7.7, Section 7.5
+        """
+        marketplace_dir = tmp_path / "marketplaces"
+        marketplace_dir.mkdir()
+        _setup_marketplace_with_plugins(
+            marketplace_dir / "market-a",
+            "market-a",
+            ["plug-1"],
+        )
+
+        caplog.set_level(logging.INFO)
+
+        def mock_run_side_effect(cmd, **kwargs):
+            if "remove" in cmd:
+                return mock.Mock(returncode=1, stdout="", stderr="remove failed")
+            return mock.Mock(returncode=0, stdout="ok", stderr="")
+
+        with (
+            mock.patch(f"{MODULE}.locate_claude_binary", return_value=claude_bin),
+            mock.patch(f"{MODULE}.get_marketplace_dir", return_value=marketplace_dir),
+            mock.patch(f"{MODULE}.subprocess.run", side_effect=mock_run_side_effect),
+        ):
+            exit_code = main()
+
+        assert exit_code != 0, "Must return non-zero when marketplace removal fails"
