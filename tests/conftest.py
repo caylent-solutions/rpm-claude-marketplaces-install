@@ -1,4 +1,5 @@
 """Shared pytest fixtures for rpm-claude-marketplaces-install."""
+
 import pathlib
 
 import pytest

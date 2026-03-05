@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Test/Coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Linter caches
+.ruff_cache/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/

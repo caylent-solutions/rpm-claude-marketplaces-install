@@ -6,14 +6,16 @@ SHELL := /bin/bash
 help: ## Show available targets and their descriptions
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-lint: ## Run all linters (ruff, markdownlint, yamllint)
-	@echo "ERROR: lint target not yet implemented (see E0-F2-S1-T2)" >&2 && exit 1
+lint: ## Run all linters (ruff check, markdownlint, yamllint)
+	ruff check .
+	markdownlint '**/*.md'
+	yamllint .
 
 format: ## Auto-fix formatting issues (ruff format)
-	@echo "ERROR: format target not yet implemented (see E0-F2-S1-T2)" >&2 && exit 1
+	ruff format .
 
-format-check: ## Verify formatting without modifying files (CI-safe)
-	@echo "ERROR: format-check target not yet implemented (see E0-F2-S1-T2)" >&2 && exit 1
+format-check: ## Verify formatting without modifying files (ruff format --check, CI-safe)
+	ruff format --check .
 
 check: lint format-check ## Run all checks: lint + format verification (read-only, CI-safe)
 
