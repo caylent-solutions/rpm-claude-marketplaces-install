@@ -46,9 +46,9 @@ plugins.
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins. Code-level default used when env var is unset. |
-| `CLAUDE_REGISTER_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each marketplace registration subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
-| `CLAUDE_INSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each plugin install subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
-| `CLAUDE_UNINSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `CLAUDE_REGISTER_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each marketplace registration subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `CLAUDE_INSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each plugin install subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
 
 ### Error Handling (Spec 7.5)
 
@@ -74,9 +74,7 @@ marketplace names, and plugin identifiers.
 
 The `uninstall_claude_marketplaces.py` module implements the uninstall
 workflow defined in the specification (section 7.7). It discovers installed
-plugins and uninstalls them, then removes marketplace registrations. This
-module provides library functions called by the RPM uninstall scriptlet and
-does not have a standalone `main()` entry point.
+plugins and uninstalls them, then removes marketplace registrations.
 
 ### Uninstall Functions
 
@@ -88,18 +86,38 @@ does not have a standalone `main()` entry point.
   `True` on success, `False` on failure. Timeouts and errors are logged.
 - `remove_marketplace(claude_bin, marketplace_path)` — Removes a marketplace
   registration via `claude plugin marketplace remove <path>`. Returns `True` on
-  success, `False` on failure. Timeouts and errors are logged.
+  success, `False` on failure. On failure, logs an ERROR and returns `False`
+  without raising — the caller continues processing remaining marketplaces. Removing
+  an already-removed marketplace is idempotent: the CLI returns success and the
+  function returns `True`.
 - `uninstall_marketplace(claude_bin, marketplace_path, marketplace_name)` —
   Orchestrates per-marketplace uninstall: discovers plugins using the shared
   `discover_plugins()` function from the install module, uninstalls each plugin,
   then removes the marketplace registration. Returns `True` if all operations
   succeeded, `False` if any operation failed.
+- `log_uninstall_summary(marketplaces_processed, plugins_uninstalled)` — Logs a
+  summary of the uninstall run with counts of marketplaces processed and plugins
+  uninstalled.
+- `main()` — Orchestrates the complete uninstall process from spec section 7.7.
+  Returns exit code `0` on full success or no work, `1` if any operation failed,
+  `127` if the `claude` binary is not found on `$PATH`.
+
+### Uninstall Exit Codes
+
+| Condition | Exit Code | Behavior |
+| --- | --- | --- |
+| `claude` binary not found on `$PATH` | 127 | Abort immediately |
+| Marketplace directory does not exist | 0 | Exit gracefully (nothing to uninstall) |
+| No marketplace entries found | 0 | Exit gracefully (nothing to uninstall) |
+| All operations succeed | 0 | Log summary, exit 0 |
+| Any plugin uninstall or marketplace remove fails | 1 | Log errors, continue, exit 1 |
 
 ### Uninstall Configuration
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `CLAUDE_UNINSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `CLAUDE_UNINSTALL_TIMEOUT` | No | (code-level) | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+| `LOG_LEVEL` | No | (code-level) | Logging level for the uninstall script when run as a standalone process. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Invalid values cause exit with code 1. Only applied when invoked via `python3 uninstall_claude_marketplaces.py`. |
 
 ## Developer Setup
 
