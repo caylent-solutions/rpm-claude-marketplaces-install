@@ -10,10 +10,14 @@ Spec Reference:
     Section 7.3 (lines 1279-1287): No fallback paths
 """
 
+import logging
 from unittest import mock
 
 import pytest
+
 from install_claude_marketplaces import locate_claude_binary
+
+MODULE = "install_claude_marketplaces"
 
 
 @pytest.mark.unit
@@ -25,11 +29,11 @@ class TestCLIDiscovery:
 
         Given: shutil.which("claude") returns "/usr/local/bin/claude"
         When: locate_claude_binary() is called
-        Then: It returns "/usr/local/bin/claude"
+        Then: It returns the absolute path to claude
         Spec: Section 7.4 Step 3
         """
         mock_path = "/usr/local/bin/claude"
-        with mock.patch("shutil.which", return_value=mock_path) as mock_which:
+        with mock.patch(f"{MODULE}.shutil.which", return_value=mock_path) as mock_which:
             result = locate_claude_binary()
             mock_which.assert_called_once_with("claude")
             assert result == mock_path
@@ -42,25 +46,24 @@ class TestCLIDiscovery:
         Then: SystemExit is raised with code 127
         Spec: Section 7.4 Step 3
         """
-        with mock.patch("shutil.which", return_value=None):
+        with mock.patch(f"{MODULE}.shutil.which", return_value=None):
             with pytest.raises(SystemExit) as exc_info:
                 locate_claude_binary()
             assert exc_info.value.code == 127
 
-    def test_spec_7_5_claude_not_found_logs_error_message(self, capfd):
+    def test_spec_7_5_claude_not_found_logs_error_message(self, caplog):
         """Verify error message is logged when claude is not found.
 
         Given: shutil.which("claude") returns None
         When: locate_claude_binary() is called
-        Then: An error message containing "claude" is written to stderr
+        Then: An error log message containing "claude" is produced
         Spec: Section 7.5
         """
-        with mock.patch("shutil.which", return_value=None):
+        with mock.patch(f"{MODULE}.shutil.which", return_value=None):
             with pytest.raises(SystemExit):
                 locate_claude_binary()
-            captured = capfd.readouterr()
-            error_output = captured.err.lower()
-            assert "claude" in error_output, "Error message must mention 'claude'"
+            error_messages = [r.message.lower() for r in caplog.records if r.levelno >= logging.ERROR]
+            assert any("claude" in msg for msg in error_messages), "Error log message must mention 'claude'"
 
     def test_spec_7_3_no_fallback_paths_only_shutil_which(self):
         """Verify only shutil.which is used — no fallback discovery mechanisms.
@@ -72,10 +75,14 @@ class TestCLIDiscovery:
         Spec: Section 7.3
         """
         with (
-            mock.patch("shutil.which", return_value=None) as mock_which,
-            mock.patch("subprocess.run", side_effect=AssertionError("subprocess.run must not be called")) as mock_run,
+            mock.patch(f"{MODULE}.shutil.which", return_value=None) as mock_which,
             mock.patch(
-                "os.path.exists", side_effect=AssertionError("os.path.exists must not be called")
+                "subprocess.run",
+                side_effect=AssertionError("subprocess.run must not be called"),
+            ) as mock_run,
+            mock.patch(
+                "os.path.exists",
+                side_effect=AssertionError("os.path.exists must not be called"),
             ) as mock_exists,
         ):
             with pytest.raises(SystemExit):

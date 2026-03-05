@@ -2,6 +2,19 @@
 
 Install and uninstall scripts for Claude Code marketplace plugins.
 
+## Install Script
+
+The `install_claude_marketplaces.py` module implements the install
+workflow defined in the specification (section 7.4). It discovers the
+`claude` CLI binary, registers marketplace directories, and installs
+plugins.
+
+### Key Functions
+
+- `locate_claude_binary()` — Locates the `claude` CLI on `$PATH` using
+  `shutil.which("claude")`. Returns the absolute path if found, or exits
+  with code 127 if not found. No fallback paths are attempted.
+
 ## Developer Setup
 
 ### Prerequisites
