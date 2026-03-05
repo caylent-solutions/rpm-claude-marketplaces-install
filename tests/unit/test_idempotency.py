@@ -43,7 +43,8 @@ def idempotency_env(tmp_path, monkeypatch):
 
     Creates a marketplace directory with one marketplace containing two plugins.
     Configures CLAUDE_MARKETPLACES_DIR env var to point at it.
-    Returns (marketplace_dir, mock_result) for use in tests.
+    Used by both install and uninstall idempotency tests.
+    Returns the marketplace_dir path.
     """
     marketplace_dir = tmp_path / "marketplaces"
     marketplace_dir.mkdir()
