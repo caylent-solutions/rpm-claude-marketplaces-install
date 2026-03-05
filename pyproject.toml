@@ -1,9 +1,12 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# Markers filter test subsets: use -m unit or -m functional with pytest
+# make test-unit runs only unit-marked tests; make test-functional runs only functional-marked tests
 markers = [
-    "unit: Unit tests",
-    "functional: Functional tests",
+    # Use -m unit or -m functional to run test subsets via make test-unit / make test-functional
+    "unit: Unit tests — fast, isolated, no external dependencies",
+    "functional: Functional tests — exercise real Makefile targets via subprocess",
 ]
 
 [tool.coverage.run]
