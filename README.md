@@ -14,6 +14,26 @@ plugins.
 - `locate_claude_binary()` — Locates the `claude` CLI on `$PATH` using
   `shutil.which("claude")`. Returns the absolute path if found, or exits
   with code 127 if not found. No fallback paths are attempted.
+- `get_marketplace_dir()` — Returns the marketplace directory path. Reads
+  `CLAUDE_MARKETPLACES_DIR` env var if set, otherwise defaults to
+  `$HOME/.claude-marketplaces`.
+- `verify_marketplace_dir(path)` — Verifies the marketplace directory exists.
+  Exits with code 0 and logs a warning if the directory is missing.
+- `discover_marketplace_entries(path)` — Discovers marketplace subdirectories.
+  Returns a sorted list of non-hidden directory entries. Excludes broken
+  symlinks (logged as warnings).
+- `read_marketplace_name(path)` — Reads the marketplace name from
+  `.claude-plugin/marketplace.json` inside the given directory. Raises
+  `FileNotFoundError`, `KeyError`, or `json.JSONDecodeError` on failure.
+- `register_marketplace(claude_bin, path)` — Registers a marketplace directory
+  with the Claude CLI. Returns `True` on success, `False` on failure.
+  Idempotent — re-registering an already-registered marketplace succeeds.
+
+### Configuration
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Directory containing marketplace plugins |
 
 ## Developer Setup
 
@@ -75,6 +95,7 @@ make clean
 | `makefile_path` | Path to the Makefile |
 | `mock_marketplace_dir` | Temporary directory with sample marketplace structure |
 | `mock_claude_cli` | Callable mock simulating the claude CLI |
+| `claude_bin` | Configurable path to the claude binary for tests |
 
 ### Available Make Targets
 
