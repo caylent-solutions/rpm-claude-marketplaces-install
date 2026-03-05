@@ -180,31 +180,165 @@ def register_marketplace(claude_bin: str, marketplace_path: pathlib.Path) -> boo
     return True
 
 
-def register_all_marketplaces(claude_bin: str, entries: list[pathlib.Path]) -> None:
-    """Register all marketplace entries, exiting non-zero if any fail.
+def discover_plugins(marketplace_path: pathlib.Path) -> list[tuple[str, pathlib.Path]]:
+    """Discover plugins within a marketplace directory.
 
-    Iterates over marketplace entries, attempts registration for each,
-    and tracks failures. Per spec section 7.5, individual registration
-    failures are logged and skipped so all marketplaces get a chance.
-    After all attempts, exits non-zero if any registration failed.
+    Scans immediate subdirectories for .claude-plugin/plugin.json files.
+    Discovery pattern: <marketplace-dir>/*/.claude-plugin/plugin.json
+
+    Subdirectories without .claude-plugin/plugin.json are skipped (not plugins).
+    If plugin.json exists but is corrupt or missing the 'name' field,
+    the error propagates to the caller (fail-fast).
+
+    Args:
+        marketplace_path: Path to the marketplace directory.
+
+    Returns:
+        List of (plugin_name, plugin_path) tuples for each discovered plugin.
+
+    Raises:
+        json.JSONDecodeError: If plugin.json exists but contains invalid JSON.
+        KeyError: If plugin.json exists but lacks the 'name' field.
+    """
+    plugins = []
+    for entry in sorted(marketplace_path.iterdir()):
+        if not entry.is_dir():
+            continue
+        plugin_json = entry / ".claude-plugin" / "plugin.json"
+        if not plugin_json.is_file():
+            continue
+        with plugin_json.open() as f:
+            data = json.load(f)
+        plugins.append((data["name"], entry))
+    return plugins
+
+
+def install_plugin(claude_bin: str, plugin_name: str, marketplace_name: str) -> bool:
+    """Install a plugin via Claude Code CLI.
+
+    Runs: claude plugin install <plugin_name>@<marketplace_name> --scope user
+
+    Environment:
+        CLAUDE_INSTALL_TIMEOUT: Subprocess timeout in seconds (default: 30).
 
     Args:
         claude_bin: Path to claude binary.
-        entries: List of marketplace directory paths to register.
+        plugin_name: Name of the plugin (from plugin.json).
+        marketplace_name: Name of the marketplace (from marketplace.json).
 
-    Exits:
-        Calls sys.exit(1) if one or more registrations failed.
+    Returns:
+        True if install succeeded, False otherwise.
     """
-    failures = []
-    for entry in entries:
-        success = register_marketplace(claude_bin, entry)
-        if not success:
-            failures.append(entry)
-
-    if failures:
+    timeout_str = os.environ.get("CLAUDE_INSTALL_TIMEOUT", "30")
+    try:
+        timeout = int(timeout_str)
+    except ValueError:
         logger.error(
-            "Failed to register %d marketplace(s): %s",
-            len(failures),
-            ", ".join(str(f) for f in failures),
+            "CLAUDE_INSTALL_TIMEOUT must be a positive integer, got: %s",
+            timeout_str,
         )
         sys.exit(1)
+
+    plugin_ref = f"{plugin_name}@{marketplace_name}"
+    try:
+        result = subprocess.run(
+            [claude_bin, "plugin", "install", plugin_ref, "--scope", "user"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        logger.error(
+            "Timed out after %d seconds installing plugin %s",
+            timeout,
+            plugin_ref,
+        )
+        return False
+
+    if result.returncode != 0:
+        logger.error(
+            "Failed to install plugin %s: %s",
+            plugin_ref,
+            result.stderr,
+        )
+        return False
+    return True
+
+
+def log_summary(
+    marketplaces_processed: int,
+    marketplaces_registered: int,
+    plugins_installed: int,
+) -> None:
+    """Log a summary of the install run.
+
+    Args:
+        marketplaces_processed: Total number of marketplaces processed.
+        marketplaces_registered: Number of marketplaces newly registered.
+        plugins_installed: Number of plugins successfully installed.
+    """
+    logger.info(
+        "Install summary: %d marketplaces processed, %d registered, %d plugins installed",
+        marketplaces_processed,
+        marketplaces_registered,
+        plugins_installed,
+    )
+
+
+def main() -> int:
+    """Orchestrate the install process per spec section 7.4.
+
+    Steps:
+        1. Configure logging
+        2. Locate claude binary (exit 127 if not found)
+        3. Verify marketplace directory (exit 0 if missing)
+        4. Discover marketplace entries
+        5. Process each marketplace: read name, register, discover plugins, install
+        6. Log summary with counts
+
+    Returns:
+        0 on success or no work, 1 if any operations failed.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    claude_bin = locate_claude_binary()
+    marketplace_dir = get_marketplace_dir()
+    verify_marketplace_dir(marketplace_dir)
+    entries = discover_marketplace_entries(marketplace_dir)
+
+    if not entries:
+        logger.warning("No marketplace entries found. Nothing to do.")
+        return 0
+
+    marketplaces_processed = 0
+    marketplaces_registered = 0
+    plugins_installed = 0
+    any_failures = False
+
+    for entry in entries:
+        marketplaces_processed += 1
+        marketplace_name = read_marketplace_name(entry)
+
+        reg_success = register_marketplace(claude_bin, entry)
+        if reg_success:
+            marketplaces_registered += 1
+        else:
+            any_failures = True
+
+        plugins = discover_plugins(entry)
+        for plugin_name, _plugin_path in plugins:
+            success = install_plugin(claude_bin, plugin_name, marketplace_name)
+            if success:
+                plugins_installed += 1
+            else:
+                any_failures = True
+
+    log_summary(marketplaces_processed, marketplaces_registered, plugins_installed)
+
+    if any_failures:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

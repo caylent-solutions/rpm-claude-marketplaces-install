@@ -453,62 +453,6 @@ class TestRegisterMarketplace:
             assert exc_info.value.code == 1
 
 
-@pytest.mark.unit
-class TestRegisterAllMarketplaces:
-    """Tests for register_all_marketplaces() per spec 7.5."""
-
-    def test_spec_7_5_all_success_no_exit(self, tmp_path, claude_bin):
-        """Verify no exit when all registrations succeed.
-
-        Given: Multiple marketplace entries that all register successfully
-        When: register_all_marketplaces() is called
-        Then: Function returns normally (no SystemExit)
-        Spec: Section 7.5
-        """
-        from install_claude_marketplaces import register_all_marketplaces
-
-        entries = [tmp_path / "market-a", tmp_path / "market-b"]
-        for e in entries:
-            e.mkdir()
-        mock_result = mock.Mock(returncode=0, stdout="ok", stderr="")
-        with mock.patch(f"{MODULE}.subprocess.run", return_value=mock_result):
-            register_all_marketplaces(claude_bin, entries)
-
-    def test_spec_7_5_some_failures_exit_1(self, tmp_path, claude_bin):
-        """Verify exit 1 when any registration fails.
-
-        Given: Multiple marketplace entries where one fails
-        When: register_all_marketplaces() is called
-        Then: All entries are attempted, then sys.exit(1) is raised
-        Spec: Section 7.5
-        """
-        from install_claude_marketplaces import register_all_marketplaces
-
-        entries = [tmp_path / "good", tmp_path / "bad"]
-        for e in entries:
-            e.mkdir()
-        results = [
-            mock.Mock(returncode=0, stdout="ok", stderr=""),
-            mock.Mock(returncode=1, stdout="", stderr="fail"),
-        ]
-        with mock.patch(f"{MODULE}.subprocess.run", side_effect=results):
-            with pytest.raises(SystemExit) as exc_info:
-                register_all_marketplaces(claude_bin, entries)
-            assert exc_info.value.code == 1
-
-    def test_spec_7_5_empty_entries_no_exit(self, claude_bin):
-        """Verify no exit when entries list is empty.
-
-        Given: Empty list of marketplace entries
-        When: register_all_marketplaces() is called
-        Then: Function returns normally
-        Spec: Section 7.5
-        """
-        from install_claude_marketplaces import register_all_marketplaces
-
-        register_all_marketplaces(claude_bin, [])
-
-
 def _write_plugin_json(plugin_path: pathlib.Path, name: str) -> None:
     """Write a .claude-plugin/plugin.json with the given name under plugin_path."""
     plugin_dir = plugin_path / ".claude-plugin"
