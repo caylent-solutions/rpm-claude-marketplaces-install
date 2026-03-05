@@ -31,6 +31,18 @@ plugins.
 - `register_all_marketplaces(claude_bin, entries)` — Registers all marketplace
   entries, logging and skipping individual failures per spec section 7.5.
   Exits with code 1 if any registration failed.
+- `discover_plugins(marketplace_path)` — Discovers plugins within a marketplace
+  directory by scanning immediate subdirectories for
+  `.claude-plugin/plugin.json`. Returns a list of `(plugin_name, plugin_path)`
+  tuples. Subdirectories without `plugin.json` are skipped.
+- `install_plugin(claude_bin, plugin_name, marketplace_name)` — Installs a
+  plugin via `claude plugin install <name>@<marketplace> --scope user`. Returns
+  `True` on success, `False` on failure. Timeouts and errors are logged.
+- `log_summary(marketplaces_processed, marketplaces_registered, plugins_installed)`
+  — Logs a summary of the install run with counts of marketplaces processed,
+  newly registered, and plugins installed.
+- `main()` — Orchestrates the complete 7-step install process from spec section
+  7.4. Returns exit code `0` on full success, non-zero if any operation failed.
 
 ### Configuration
 
@@ -38,6 +50,7 @@ plugins.
 | --- | --- | --- | --- |
 | `CLAUDE_MARKETPLACES_DIR` | No | `$HOME/.claude-marketplaces` | Filesystem path to the directory containing marketplace plugins |
 | `CLAUDE_REGISTER_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each marketplace registration subprocess. Invalid values cause exit with code 1. |
+| `CLAUDE_INSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each plugin install subprocess. Invalid values cause exit with code 1. |
 
 ## Developer Setup
 
