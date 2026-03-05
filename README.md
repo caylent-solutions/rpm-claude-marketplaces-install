@@ -69,6 +69,32 @@ start of `main()`. All output uses the Python `logging` module — `print()`
 is never used. Log messages include relevant context such as file paths,
 marketplace names, and plugin identifiers.
 
+## Uninstall Script
+
+The `uninstall_claude_marketplaces.py` module implements the uninstall
+workflow defined in the specification (section 7.7). It discovers installed
+plugins and uninstalls them, then removes marketplace registrations.
+
+### Uninstall Functions
+
+- `uninstall_plugin(claude_bin, plugin_name, marketplace_name)` — Uninstalls a
+  plugin via `claude plugin uninstall <name>@<marketplace> --scope user`. Returns
+  `True` on success, `False` on failure. Timeouts and errors are logged.
+- `remove_marketplace(claude_bin, marketplace_path)` — Removes a marketplace
+  registration via `claude plugin marketplace remove <path>`. Returns `True` on
+  success, `False` on failure.
+- `uninstall_marketplace(claude_bin, marketplace_path, marketplace_name)` —
+  Orchestrates per-marketplace uninstall: discovers plugins using the shared
+  `discover_plugins()` function from the install module, uninstalls each plugin,
+  then removes the marketplace registration. Returns `True` if all operations
+  succeeded.
+
+### Uninstall Configuration
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `CLAUDE_UNINSTALL_TIMEOUT` | No | `30` | Positive integer string — timeout in seconds for each uninstall/remove subprocess. Code-level default used when env var is unset. Invalid values cause exit with code 1. |
+
 ## Developer Setup
 
 ### Prerequisites
